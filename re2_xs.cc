@@ -9,7 +9,7 @@
 #endif
 
 namespace {
-    REGEXP * RE2_comp(pTHX_ 
+    REGEXP * RE2_comp(pTHX_
 // Constness differs on different versions of Perl
 #if PERL_VERSION == 10
             const
@@ -39,7 +39,7 @@ const regexp_engine re2_engine = {
     Perl_reg_named_buff,
     Perl_reg_named_buff_iter,
     RE2_package,
-#if defined(USE_ITHREADS)        
+#if defined(USE_ITHREADS)
     RE2_dupe,
 #endif
 };
@@ -78,15 +78,15 @@ RE2_comp(pTHX_
     else if (plen == 3 && strnEQ("\\s+", exp, 3))
         extflags |= RXf_WHITE;
 
-    /* Perl modifiers to flags, /s is implicit and /p isn't used
-     * but they pose no problem so ignore them */
-    if (flags & RXf_PMf_FOLD)
-        options.set_case_sensitive(false); /* /i */
     if (flags & RXf_PMf_EXTENDED)
         perl_only = true;  /* /x */
-    if (flags & RXf_PMf_MULTILINE) // XXX: actually is this backwards?
-        perl_only = true; /* /m */
 
+    options.set_case_sensitive(!(flags & RXf_PMf_FOLD)); /* /i */
+    options.set_one_line(!(flags & RXf_PMf_MULTILINE)); /* not /m */
+    /* XXX: handle /s (needs RE2 changes to expose interface, don't really want
+       to get into prepending (?s) modifiers to the regexp itself. */
+
+    // XXX: Need to compile two versions?
     /* The pattern is not UTF-8. Tell RE2 to treat it as Latin1. */
 #ifdef RXf_UTF8
     if (!(flags & RXf_UTF8))
@@ -101,11 +101,10 @@ RE2_comp(pTHX_
 
     // Try and compile first, if this fails we will fallback to Perl regex via
     // Perl_re_compile.
-    RE2 * ri;
+    RE2 * ri = NULL;
 
     if (!perl_only) {
         ri = new RE2 (re2::StringPiece(exp, plen), options);
-        //XXX: try/catch
     }
 
     if (perl_only || ri->error_code()) {
@@ -125,13 +124,41 @@ RE2_comp(pTHX_
     rx->extflags = extflags;
     rx->engine   = &re2_engine;
 
-    /* Preserve a copy of the original pattern */
-    /*RX_PRELEN(rx_sv) = (I32)plen;
-    RX_PRECOMP(rx_sv) = SAVEPVN(exp, plen);*/
+    /* qr// stringification */
+    SV * wrapped = newSVpvn("(?", 2), * wrapped_unset = newSVpvn("", 0);
+    sv_2mortal(wrapped);
+    sv_2mortal(wrapped_unset);
 
-    /* qr// stringification, TODO: (?flags:pattern) */
-    /*RX_WRAPLEN(rx_sv) = RX_PRELEN(rx);
-    RX_WRAPPED(rx_sv) = RX_PRECOMP(rx);*/
+    sv_catpvn(flags & RXf_PMf_FOLD ? wrapped : wrapped_unset, "i", 1);
+    sv_catpvn(flags & RXf_PMf_EXTENDED ? wrapped : wrapped_unset, "x", 1);
+    sv_catpvn(flags & RXf_PMf_MULTILINE ? wrapped : wrapped_unset, "m", 1);
+
+    if (SvCUR(wrapped_unset)) {
+      sv_catpvn(wrapped, "-", 1);
+      sv_catsv(wrapped, wrapped_unset);
+    }
+
+    sv_catpvn(wrapped, ":", 1);
+#if PERL_VERSION > 10
+    rx->pre_prefix = SvCUR(wrapped);
+#endif
+
+    sv_catpvn(wrapped, exp, plen);
+    sv_catpvn(wrapped, ")", 1);
+
+#if PERL_VERSION == 10
+    rx->wraplen = SvCUR(wrapped);
+    rx->wrapped = savepvn(SvPVX(wrapped), SvCUR(wrapped));
+#else
+    RX_WRAPPED(rx_sv) = savepvn(SvPVX(wrapped), SvCUR(wrapped));
+    RX_WRAPLEN(rx_sv) = SvCUR(wrapped);
+#endif
+
+#if PERL_VERSION == 10
+    /* Preserve a copy of the original pattern */
+    rx->prelen = (I32)plen;
+    rx->precomp = savepvn(exp, plen);
+#endif
 
     /* Store our private object */
     rx->pprivate = (void *) ri;
@@ -141,10 +168,10 @@ RE2_comp(pTHX_
     /* If named captures are defined make rx->paren_names */
 #endif
 
-    rx->nparens = rx->lastparen = rx->lastcloseparen = 1 + ri->NumberOfCapturingGroups();
+    rx->lastparen = rx->lastcloseparen = rx->nparens = ri->NumberOfCapturingGroups();
 
     Newxz(rx->offs, rx->nparens + 1, regexp_paren_pair);
-    
+
     /* return the regexp */
     return rx_sv;
 }
@@ -157,13 +184,24 @@ RE2_exec(pTHX_ REGEXP * const rx, char *stringarg, char *strend,
     RE2 * ri = (RE2*) RegSV(rx)->pprivate;
     regexp * re = RegSV(rx);
 
-    re2::StringPiece res[re->nparens];
+    re2::StringPiece res[re->nparens + 1];
+
+//#define RE2_DEBUG
+#ifdef RE2_DEBUG
+    Perl_warner(aTHX_ packWARN(WARN_MISC), "RE2: Matching '%s' (%p, %p) against '%s'", stringarg, strbeg, stringarg, RX_WRAPPED(rx));
+#endif
+
+    if(stringarg > strend) {
+      re->offs[0].start = -1;
+      re->offs[0].end   = -1;
+      return 0;
+    }
 
     bool ok = ri->Match(
-            re2::StringPiece(stringarg, strend - stringarg),
-            strbeg - stringarg,
+            re2::StringPiece(strbeg, strend - strbeg),
+            stringarg - strbeg,
             RE2::UNANCHORED,
-            res, (int)re->nparens);
+            res, sizeof res / sizeof *res);
 
     /* Matching failed */
     if (!ok) {
@@ -173,9 +211,14 @@ RE2_exec(pTHX_ REGEXP * const rx, char *stringarg, char *strend,
     re->subbeg = strbeg;
     re->sublen = strend - strbeg;
 
-    for (int i = 0; i < re->nparens; i++) {
-        re->offs[i].start = res[i].data() - stringarg;
-        re->offs[i].end   = re->offs[i].start + res[i].length();
+    for (int i = 0; i <= re->nparens; i++) {
+        if(res[i].data()) {
+            re->offs[i].start = res[i].data() - strbeg;
+            re->offs[i].end   = res[i].data() - strbeg + res[i].length();
+        } else {
+            re->offs[i].start = -1;
+            re->offs[i].end   = -1;
+        }
     }
 
     return 1;
@@ -222,4 +265,19 @@ RE2_package(pTHX_ REGEXP * const rx)
 }
 
 };
+
+// Unnamespaced
+extern "C" void RE2_possible_match_range(REGEXP* rx, STRLEN len, SV** min_sv, SV** max_sv)
+{
+    RE2* re2 = (RE2*) RegSV(rx)->pprivate;
+    std::string min, max;
+
+    re2->PossibleMatchRange(&min, &max, (int)len);
+
+    *min_sv = newSVpvn(min.data(), min.size());
+    *max_sv = newSVpvn(max.data(), max.size());
+
+    return;
+}
+
 // ex:sw=4 et:
