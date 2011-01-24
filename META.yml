@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               re-engine-RE2
-version:            0.02
+version:            0.03
 abstract:           RE2 regex engine
 author:
     - David Leadbeater <dgl@dgl.cx>
@@ -8,6 +8,7 @@ license:            perl
 distribution_type:  module
 configure_requires:
     ExtUtils::CppGuess:  0
+    Test::More:          0.88
 build_requires:
     ExtUtils::MakeMaker:  0
 requires:  {}

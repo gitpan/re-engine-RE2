@@ -90,7 +90,6 @@ re2/util/benchmark.cc
 re2/util/benchmark.h
 re2/util/flags.h
 re2/util/hash.cc
-re2/util/hash_map.h
 re2/util/logging.h
 re2/util/mutex.h
 re2/util/pcre.cc
@@ -115,6 +114,7 @@ re2/util/valgrind.h
 re2_xs.cc
 re2_xs.h
 t/00.compile.t
+t/00.re2-tests.t
 t/01.basic.t
 t/02.chars.t
 t/03.modifiers.t

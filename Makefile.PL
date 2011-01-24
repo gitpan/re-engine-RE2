@@ -2,6 +2,7 @@ use 5.010;
 use strict;
 use warnings;
 
+use Config;
 use ExtUtils::MakeMaker;
 use ExtUtils::CppGuess;
 
@@ -21,34 +22,47 @@ my %opt = (
   PMLIBDIRS          => ["lib"],
   OBJECT             => join(" ", @objects),
   test               => {TESTS => 't/*.t t/ree-pcre/*.t'},
-  CONFIGURE_REQUIRES => { "ExtUtils::CppGuess" => 0 },
+  CONFIGURE_REQUIRES => {
+    "ExtUtils::CppGuess" => 0,
+    "Test::More"         => 0.88,
+  },
   $guess->makemaker_options
 );
 
-$opt{LIBS} .= "-lpthread";
+if($Config{usethreads} eq 'define') {
+  if($Config{i_pthread} eq 'define') {
+    $opt{DEFINE} = "-DHAVE_PTHREAD -pthread";
+  }
+} else {
+  $opt{DEFINE} = "-DNO_THREADS";
+}
 
 # This is a bit hacky, RE2 makefile needs GNU make, for now we'll try to find
 # it, ideally should rewrite the RE2 makefile to not need GNU make.
+our $MAKE;
 for my $make(qw(make gmake)) {
   if(qx{$make --version 2>&1} =~ /GNU Make/i) {
-    $opt{postamble} = { make => $make };
+    $MAKE = $make;
     last;
   }
 }
 
-if(!$opt{postamble} || !$opt{postamble}{make}) {
+if(!$MAKE) {
   die "RE2 currently needs GNU Make, please install gmake.\n";
 }
 
 WriteMakefile(%opt);
 
-package MY;
-
-sub postamble {
-  my($class, %postamble) = @_;
+sub MY::postamble {
   return <<MAKE_FRAG;
+
+RE2_FLAGS = CC="\$(CC)" CXXFLAGS="\$(CCFLAGS) \$(CCCDLFLAGS) \$(OPTIMIZE) \$(DEFINE)" LDFLAGS="\$(OTHERLDFLAGS)"
+
 re2/obj/libre2.a: re2/Makefile
-	$postamble{make} -C re2 obj/libre2.a
+	$MAKE -C re2 obj/libre2.a \$(RE2_FLAGS)
+
+re2-tests:
+	$MAKE -C re2 static-test \$(RE2_FLAGS)
+ 
 MAKE_FRAG
 }
-
