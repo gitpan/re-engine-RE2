@@ -2,7 +2,7 @@ package re::engine::RE2;
 use 5.010;
 
 BEGIN {
-  $re::engine::RE2::VERSION = "0.05";
+  $re::engine::RE2::VERSION = "0.06";
 }
 
 use XSLoader ();
@@ -38,6 +38,8 @@ sub unimport
 1;
 
 __END__
+
+=encoding utf8
 
 =head1 NAME
 
@@ -202,5 +204,8 @@ E<lt>cpan@audreyt.orgE<gt> and Yves Orton.
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
+
+(However the bundled copy of RE2 has a different copyright owner and is under a
+BSD-like license, see F<re2/LICENSE>.)
 
 =cut

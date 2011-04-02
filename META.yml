@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               re-engine-RE2
-version:            0.05
+version:            0.06
 abstract:           RE2 regex engine
 author:
     - David Leadbeater <dgl@dgl.cx>
