@@ -1,4 +1,5 @@
 #include "re2_xs.h"
+#include "ppport.h"
 
 MODULE = re::engine::RE2 PACKAGE = re::engine::RE2
 PROTOTYPES: ENABLE
@@ -21,10 +22,10 @@ PPCODE:
                 croak("qr// reference to a re::engine::RE2 instance required");
         rx = SvRX(self);
 
-        RE2_possible_match_range(rx, len, &possible_min, &possible_max);
+        RE2_possible_match_range(aTHX_ rx, len, &possible_min, &possible_max);
 
-        XPUSHs(possible_min);
-        XPUSHs(possible_max);
+        mXPUSHs(possible_min);
+        mXPUSHs(possible_max);
 
 void
 set_max_mem(int mem)
