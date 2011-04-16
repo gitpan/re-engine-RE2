@@ -2,7 +2,7 @@ package re::engine::RE2;
 use 5.010;
 
 BEGIN {
-  $re::engine::RE2::VERSION = "0.07";
+  $re::engine::RE2::VERSION = "0.07_01";
 }
 
 use XSLoader ();
@@ -24,7 +24,11 @@ sub import
     if (@_) {
         my %args = @_;
         if (exists $args{"-max_mem"}) {
-            re::engine::RE2::set_max_mem($args{"-max_mem"});
+            $^H{__PACKAGE__ . "::max-mem"} = $args{"-max_mem"};
+        }
+
+        if (exists $args{"-strict"}) {
+            $^H{__PACKAGE__ . "::strict"} = $args{"-strict"};
         }
     }
 }
@@ -85,6 +89,23 @@ Example:
     my($min, $max) = qr/^(a|b)/->possible_match_range;
     is $min, 'a';
     is $max, 'c';'
+
+=back
+
+=head1 PRAGMA OPTIONS
+
+Various options can be set by providing options to the C<use> line. These will
+be pragma scoped.
+
+=over 4
+
+=item * C<< -max_mem => 1<<24 >>
+
+Configure RE2's memory limit.
+
+=item * C<< -strict => 1 >>
+
+Be strict, i.e. don't allow regexps that are not supported by RE2.
 
 =back
 
@@ -158,6 +179,8 @@ by C<qr//>:
 
   # Perl Regexp used instead
   ok not qr/(?<=foo)bar/->isa("re::engine::RE2");
+
+If you wish to force RE2, use the C<-strict> option.
 
 =back
 
