@@ -2,7 +2,7 @@ package re::engine::RE2;
 use 5.010;
 
 BEGIN {
-  $re::engine::RE2::VERSION = "0.08";
+  $re::engine::RE2::VERSION = "0.09";
 }
 
 use XSLoader ();
@@ -29,6 +29,14 @@ sub import
 
         if (exists $args{"-strict"}) {
             $^H{__PACKAGE__ . "::strict"} = $args{"-strict"};
+        }
+
+        if (exists $args{"-longest_match"}) {
+            $^H{__PACKAGE__ . "::longest-match"} = $args{"-longest_match"};
+        }
+
+        if (exists $args{"-never_nl"}) {
+            $^H{__PACKAGE__ . "::never-nl"} = $args{"-never_nl"};
         }
     }
 }
@@ -64,7 +72,7 @@ This module replaces perl's regex engine in a given lexical scope with RE2.
 RE2 is a primarily DFA based regexp engine from Google that is very fast at
 matching large amounts of text. However it does not support look behind and
 some other Perl regular expression features. See
-L<http://code.google.com/p/re2|RE2's website> for more information.
+L<RE2's website|http://code.google.com/p/re2> for more information.
 
 Fallback to normal Perl regexp is implemented by this module. If RE2 is unable
 to compile a regexp it will use Perl instead, therefore features not
@@ -106,6 +114,16 @@ Configure RE2's memory limit.
 =item * C<< -strict => 1 >>
 
 Be strict, i.e. don't allow regexps that are not supported by RE2.
+
+=item * C<< -longest_match => 1 >>
+
+Match on the longest match in alternations. For example with this option set
+matching C<"abc"> against C<(a|abc)> will match C<"abc">, without depending on
+order.
+
+=item * C<< -never_nl => 1 >>
+
+Never match a newline (C<"\n">) even if the provided regexp contains it.
 
 =back
 
