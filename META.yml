@@ -1,24 +1,24 @@
----
-abstract: 'RE2 regex engine'
+--- #YAML:1.0
+name:               re-engine-RE2
+version:            0.10
+abstract:           RE2 regex engine
 author:
-  - 'David Leadbeater <dgl@dgl.cx>'
-build_requires:
-  ExtUtils::MakeMaker: 0
+    - David Leadbeater <dgl@dgl.cx>
+license:            perl
+distribution_type:  module
 configure_requires:
-  ExtUtils::CppGuess: 0
-  Test::More: 0.88
-dynamic_config: 1
-generated_by: 'ExtUtils::MakeMaker version 6.62, CPAN::Meta::Converter version 2.120630'
-license: perl
-meta-spec:
-  url: http://module-build.sourceforge.net/META-spec-v1.4.html
-  version: 1.4
-name: re-engine-RE2
-no_index:
-  directory:
-    - t
-    - inc
-requires: {}
+    ExtUtils::CppGuess:  0
+    Test::More:          0.88
+build_requires:
+    ExtUtils::MakeMaker:  0
+requires:  {}
 resources:
-  repository: https://github.com/dgl/re-engine-RE2
-version: 0.09
+    repository:  https://github.com/dgl/re-engine-RE2
+no_index:
+    directory:
+        - t
+        - inc
+generated_by:       ExtUtils::MakeMaker version 6.57_05
+meta-spec:
+    url:      http://module-build.sourceforge.net/META-spec-v1.4.html
+    version:  1.4
