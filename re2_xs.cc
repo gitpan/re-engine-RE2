@@ -2,15 +2,26 @@
 
 // This needs to be first, Perl is rude and defines macros like "Copy"
 #include <re2/re2.h>
+#include <map>
 #include "re2_xs.h"
 #include "compat-cophh.h"
 #include "compat-rx.h"
+
+#define HAS_PERL_RE_OP_COMPILE (PERL_VERSION > 17 || \
+        (PERL_VERSION == 17 && PERL_SUBVERSION >= 1))
+
+#if HAS_PERL_RE_OP_COMPILE
+#include <regcomp.h>
+#endif
 
 #if PERL_VERSION > 10
 #define RegSV(p) SvANY(p)
 #else
 #define RegSV(p) (p)
 #endif
+
+using std::map;
+using std::string;
 
 namespace {
     REGEXP * RE2_comp(pTHX_
@@ -68,6 +79,9 @@ const regexp_engine re2_engine = {
     RE2_package,
 #if defined(USE_ITHREADS)
     RE2_dupe,
+#endif
+#if HAS_PERL_RE_OP_COMPILE
+    NULL,
 #endif
 };
 
@@ -152,7 +166,7 @@ RE2_comp(pTHX_
                 "re::engine::RE2::strict", 0);
 
         if (SvOK(re2_strict) && SvTRUE(re2_strict)) {
-            const std::string error = ri->error();
+            const string error = ri->error();
             delete ri;
 
             croak(perl_only
@@ -164,7 +178,14 @@ RE2_comp(pTHX_
         delete ri;
 
         // Fallback. Perl will either compile or print errors for us.
+#if HAS_PERL_RE_OP_COMPILE
+        // Yuck -- remove constness, the core does this too...
+        SV *pat = const_cast<SV*>(pattern);
+        return Perl_re_op_compile(aTHX_ &pat, 1, NULL, &PL_core_reg_engine,
+                NULL, NULL, flags, 0);
+#else
         return Perl_re_compile(aTHX_ pattern, flags);
+#endif
     }
 
     REGEXP *rx_sv;
@@ -193,10 +214,26 @@ RE2_comp(pTHX_
     /* Store our private object */
     rx->pprivate = (void *) ri;
 
-#if 0
-    ri->NamedCapturingGroups();
     /* If named captures are defined make rx->paren_names */
-#endif
+    const map<string, int> ncg(ri->NamedCapturingGroups());
+    for(map<string, int>::const_iterator it = ncg.begin();
+          it != ncg.end();
+          ++it) {
+        // This block assumes RE2 won't give us multiple named captures of the
+        // same name -- it currently doesn't support this.
+        SV* value = newSV_type(SVt_PVNV);
+
+        SvIV_set(value, 1);
+        SvIOK_on(value);
+        I32 offsetp = it->second;
+        sv_setpvn(value, (char*)&offsetp, sizeof offsetp);
+
+        if (!RXp_PAREN_NAMES(rx)) {
+          RXp_PAREN_NAMES(rx) = newHV();
+        }
+
+        hv_store(RXp_PAREN_NAMES(rx), it->first.data(), it->first.size(), value, 0);
+    }
 
     rx->lastparen = rx->lastcloseparen = rx->nparens = ri->NumberOfCapturingGroups();
 
@@ -307,7 +344,7 @@ RE2_package(pTHX_ REGEXP * const rx)
 extern "C" void RE2_possible_match_range(pTHX_ REGEXP* rx, STRLEN len, SV** min_sv, SV** max_sv)
 {
     const RE2 *const re2 = (RE2*) RegSV(rx)->pprivate;
-    std::string min, max;
+    string min, max;
 
     re2->PossibleMatchRange(&min, &max, (int)len);
 
